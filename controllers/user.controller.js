@@ -1,25 +1,26 @@
-const { response } = require('express');
-const User = require('../models/user');
+const { response, request } = require('express');
 const bcryptjs = require('bcryptjs');
-const { validarCampos } = require('../middlewares/validar-campos');
+const User = require('../models/user');
 
-const usuariosGet = (req, res = response) => {
+const usuariosGet = async (req = request , res = response) => {
+    const { limit = 5, desde = 0} = req.query;
+    const query = { state: true };
+    
 
-    const { nombre, apikey } = req.query;
+    const [ total, users ] = await Promise.all([
+        User.countDocuments(query),
+        User.find(query)
+            .skip(desde)
+            .limit(limit)
+    ]);
+
     res.json({
-        msg: 'Esto es una petición GET',
-        nombre,
-        apikey
+        total,
+        users
     })
 };
 
-const usuariosPut = (req, res = response) => {
-    const { id }= req.params;
-    res.json({
-        msg: 'Esto es una petición PUT',
-        id
-    })
-};
+
 
 const usuariosPost = async (req, res = response) => {
     // Desestructurando asi la respuesta, eso es solo que vamos a recibir, si el formulario tiene campos que no son necesarios para
@@ -27,15 +28,6 @@ const usuariosPost = async (req, res = response) => {
 
     const { name, email, password, role }= req.body;
     const user = new User( { name, email, password, role } );
-
-    // Verificar si el correo existe
-    const existeEmail = await User.findOne( { email } );
-   if (existeEmail) {
-        return res.status(400).json({
-            msg: 'Ese correo ya está reguistrado'
-        });
-   }
-
 
     // Encriptar la contraseña
     const salt = bcryptjs.genSaltSync();
@@ -48,10 +40,30 @@ const usuariosPost = async (req, res = response) => {
     })
 };
 
-const usuariosDelete = (req, res = response) => {
-    res.json({
-        msg: 'Esto es una petición DELETE'
-    })
+const usuariosPut = async (req, res = response) => {
+    const { id }= req.params;
+
+    const { _id, role, password, google, ...resto } = req.body;
+
+    // TODO validar contra la base de datos
+
+    if (password) {
+        // Encriptar la contraseña
+        const salt = bcryptjs.genSaltSync();
+        resto.password = bcryptjs.hashSync( password, salt);
+    }
+
+
+    const user = await User.findByIdAndUpdate( id, resto )
+    res.json( user );
+};
+
+const usuariosDelete = async (req, res = response) => {
+    const { id } = req.params;
+
+    
+    const user = await User.findByIdAndUpdate(id, {state: false});
+    res.json( user );
 };
 
 const usuariosPatch = (req, res = response) => {
